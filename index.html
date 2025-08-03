@@ -21,6 +21,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -78,7 +79,7 @@
                 <div class="mb-4"><label for="nim" class="block text-sm font-bold text-gray-700 mb-2">Nomor Induk Mahasiswa</label><input type="text" id="nim" required class="shadow-sm border rounded w-full py-2 px-3 text-gray-700"></div>
                 <div class="mb-4"><label for="kampus" class="block text-sm font-bold text-gray-700 mb-2">Nama Kampus</label><input type="text" id="kampus" required class="shadow-sm border rounded w-full py-2 px-3 text-gray-700"></div>
                 <div class="mb-6"><label for="foto" class="block text-sm font-bold text-gray-700 mb-2">Upload Foto Bukti</label><input type="file" id="foto" required accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"></div>
-                <div class="mt-6"><button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg w-full">Kirim Absensi ke Admin</button></div>
+                <div class="mt-6"><button type="submit" id="btn-kirim-absen" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg w-full">Kirim Absensi</button></div>
                 <div class="text-center mt-6"><button type="button" id="btn-logout" class="text-sm text-gray-500 hover:text-blue-600 underline">Logout</button></div>
             </form>
         </div>
@@ -87,11 +88,11 @@
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-2xl font-bold text-gray-800">Dashboard Laporan Absensi</h1>
                 <div class="flex items-center space-x-4">
-                    <button id="btn-lihat-mahasiswa" class="text-sm text-blue-600 hover:text-blue-800 underline">Daftar Mahasiswa</button>
+                    <button id="btn-lihat-mahasiswa" class="text-sm text-blue-600 hover:text-blue-800 underline">Daftar Mahasiswa (Soon)</button>
                     <button id="btn-admin-logout" class="text-sm text-gray-500 hover:text-blue-600 underline">Logout</button>
                 </div>
             </div>
-            <p class="text-gray-600 mb-4">Berikut adalah daftar seluruh absensi mahasiswa. Anda dapat mengubah waktu dan status secara manual.</p>
+            <p class="text-gray-600 mb-4">Berikut adalah daftar seluruh absensi mahasiswa. Data akan ter-update secara otomatis.</p>
             
             <div class="overflow-x-auto rounded-lg border border-gray-200">
                 <table class="min-w-full bg-white">
@@ -115,7 +116,7 @@
                 <button id="btn-kirim-laporan-email" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">Kirim Laporan ke Email</button>
             </div>
         </div>
-        </div>
+    </div>
 
     <div id="modal-konfirmasi" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div class="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
@@ -143,7 +144,6 @@
     </div>
 
     <script>
-        // ✔️ STEP 3.2: TAMBAHKAN KONFIGURASI DAN INISIALISASI FIREBASE
         // GANTI DENGAN KODE KONFIGURASI DARI PROYEK FIREBASE ANDA
         const firebaseConfig = {
           apiKey: "AIzaSy...GANTI-DENGAN-API-KEY-ANDA",
@@ -157,6 +157,7 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+        const storage = firebase.storage();
 
         // --- Elemen DOM ---
         const halamanLogin = document.getElementById('halaman-login');
@@ -213,44 +214,67 @@
             tampilkanLaporanAbsensi(); 
         };
 
+        // --- Cek Status Login Saat Halaman Dimuat ---
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                // Jika user adalah admin, langsung ke halaman admin
+                if (user.email === ADMIN_EMAIL) {
+                    goToAdminPage();
+                } else {
+                // Jika user adalah mahasiswa, ke halaman absen
+                    goToAbsenPage();
+                }
+            } else {
+                // Jika tidak ada user, tampilkan halaman login
+                goToHalamanLogin();
+            }
+        });
+
         // --- Event Listener ---
         linkKeDaftar.addEventListener('click', () => { halamanLogin.style.display = 'none'; halamanDaftar.style.display = 'block'; });
         linkKeLogin.addEventListener('click', () => { halamanDaftar.style.display = 'none'; halamanLogin.style.display = 'block'; });
-        btnLogout.addEventListener('click', goToHalamanLogin);
-        btnAdminLogout.addEventListener('click', goToHalamanLogin);
+        
+        btnLogout.addEventListener('click', () => auth.signOut());
+        btnAdminLogout.addEventListener('click', () => auth.signOut());
+
         tombolTutupModal.addEventListener('click', () => { modalKonfirmasi.style.display = 'none'; });
-        btnLihatMahasiswa.addEventListener('click', tampilkanDaftarMahasiswa);
+        // btnLihatMahasiswa.addEventListener('click', tampilkanDaftarMahasiswa); // Sementara dinonaktifkan
         tombolTutupModalMahasiswa.addEventListener('click', () => { modalMahasiswa.style.display = 'none'; });
 
-        // --- SISA KODE JAVASCRIPT ANDA MASIH MENGGUNAKAN localStorage ---
-        // --- LANJUTKAN KE LANGKAH 4 UNTUK MENGGANTI LOGIKA DI BAWAH INI ---
+        // --- LOGIKA FIREBASE ---
         
+        // Pendaftaran Akun
         formDaftar.addEventListener('submit', (event) => {
             event.preventDefault();
             const email = document.getElementById('daftar-email').value;
             const password = document.getElementById('daftar-password').value;
-            if (!email || !password) { tampilkanModal('Gagal', 'Email dan password kosong.', true); return; }
-            if (email === ADMIN_EMAIL) { tampilkanModal('Registrasi Gagal', 'Email ini untuk admin.', true); return; }
-            let userCredentials = JSON.parse(localStorage.getItem('user_credentials')) || {};
-            if (userCredentials[email]) {
-                tampilkanModal('Registrasi Gagal', 'Email sudah terdaftar.', true);
-            } else {
-                userCredentials[email] = password;
-                localStorage.setItem('user_credentials', JSON.stringify(userCredentials));
-                tampilkanModal('Registrasi Berhasil', `Akun untuk ${email} telah dibuat.`);
-                goToHalamanLogin();
-            }
+            if (!email || !password) { tampilkanModal('Gagal', 'Email dan password tidak boleh kosong.', true); return; }
+            if (email === ADMIN_EMAIL) { tampilkanModal('Registrasi Gagal', 'Email ini khusus untuk admin.', true); return; }
+
+            auth.createUserWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    tampilkanModal('Registrasi Berhasil', `Akun untuk ${email} telah dibuat.`);
+                    formDaftar.reset();
+                    goToHalamanLogin();
+                })
+                .catch((error) => {
+                    tampilkanModal('Registrasi Gagal', error.message, true);
+                });
         });
+
+        // Login Akun
         formLogin.addEventListener('submit', (event) => {
             event.preventDefault();
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
-            if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) { goToAdminPage(); return; }
-            let userCredentials = JSON.parse(localStorage.getItem('user_credentials')) || {};
-            if (userCredentials[email] && userCredentials[email] === password) { goToAbsenPage(); } 
-            else { tampilkanModal('Login Gagal', 'Email atau password salah.', true); }
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .catch((error) => {
+                    tampilkanModal('Login Gagal', 'Email atau password salah.', true);
+                });
         });
 
+        // Kirim Absensi
         formAbsen.addEventListener('submit', (event) => {
             event.preventDefault();
             if (!formAbsen.checkValidity()) { formAbsen.reportValidity(); return; }
@@ -258,126 +282,174 @@
             const nim = document.getElementById('nim').value;
             const kampus = document.getElementById('kampus').value;
             const foto = document.getElementById('foto').files[0];
-            const reader = new FileReader();
-            reader.readAsDataURL(foto);
-            reader.onloadend = function() {
-                const waktuSekarang = new Date();
-                const newSubmission = {
-                    nama: nama, nim: nim, kampus: kampus, fotoBase64: reader.result,
-                    waktu: waktuSekarang.toISOString(),
-                    waktuMasuk: waktuSekarang.toTimeString().slice(0, 5),
-                    waktuPulang: '',
-                    status: 'Hadir'
-                };
-                let absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-                absensiData.push(newSubmission);
-                localStorage.setItem('absensi_data', JSON.stringify(absensiData));
-                tampilkanModal('Absensi Terkirim', 'Data Anda telah disimpan.');
-                formAbsen.reset();
-            }
-        });
+            const btnKirim = document.getElementById('btn-kirim-absen');
+            
+            const currentUser = auth.currentUser;
 
-        function tampilkanLaporanAbsensi() {
-            const absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-            tabelLaporanBody.innerHTML = '';
-            if (absensiData.length === 0) {
-                tabelLaporanBody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-gray-500">Tidak ada data absensi.</td></tr>`;
+            if (!currentUser) {
+                tampilkanModal('Gagal', 'Sesi Anda telah berakhir, silakan login kembali.', true);
                 return;
             }
-            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
-            absensiData.forEach((data, index) => {
-                const waktuKirimObj = new Date(data.waktu);
-                const waktuKirimFormatted = waktuKirimObj.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) + ' ' + waktuKirimObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-                const row = document.createElement('tr');
-                row.className = 'border-b border-gray-200 hover:bg-gray-50';
-                row.innerHTML = `
-                    <td class="py-3 px-4">${index + 1}</td>
-                    <td class="py-3 px-4">${data.nama}</td>
-                    <td class="py-3 px-4">${data.nim}</td>
-                    <td class="py-3 px-4 text-center"><img src="${data.fotoBase64}" class="h-12 w-12 object-cover rounded-md mx-auto cursor-pointer" onclick="tampilkanModal('Foto Bukti', '<img src=\\'${data.fotoBase64}\\' class=\\'w-full h-auto rounded-lg\\'>')"></td>
-                    <td class="py-3 px-4">${waktuKirimFormatted}</td>
-                    <td class="py-3 px-4"><input type="time" class="border rounded px-2 py-1 w-full" value="${data.waktuMasuk || ''}" onchange="simpanWaktu(${index}, 'waktuMasuk', this.value)"></td>
-                    <td class="py-3 px-4"><input type="time" class="border rounded px-2 py-1 w-full" value="${data.waktuPulang || ''}" onchange="simpanWaktu(${index}, 'waktuPulang', this.value)"></td>
-                    <td class="py-3 px-4"><select class="border rounded px-2 py-1 w-full" onchange="simpanStatus(${index}, this.value)">${buatOpsiStatus(data.status)}</select></td>
-                    <td class="py-3 px-4 text-center"><button class="bg-red-500 hover:bg-red-700 text-white text-xs font-bold py-1 px-2 rounded" onclick="hapusAbsensi(${index})">Hapus</button></td>
-                `;
-                tabelLaporanBody.appendChild(row);
+            if (!foto) {
+                tampilkanModal('Gagal', 'Silakan upload foto bukti.', true);
+                return;
+            }
+
+            btnKirim.disabled = true;
+            btnKirim.textContent = 'Mengunggah...';
+
+            // 1. Upload foto ke Firebase Storage
+            const filePath = `bukti/${currentUser.uid}/${Date.now()}_${foto.name}`;
+            const storageRef = storage.ref(filePath);
+            const uploadTask = storageRef.put(foto);
+
+            uploadTask.on('state_changed', 
+                (snapshot) => { /* bisa tambahkan progress bar di sini */ }, 
+                (error) => { // Handle unsuccessful uploads
+                    console.error("Upload failed: ", error);
+                    tampilkanModal('Upload Gagal', 'Gagal mengunggah foto.', true);
+                    btnKirim.disabled = false;
+                    btnKirim.textContent = 'Kirim Absensi';
+                }, 
+                () => { // Handle successful uploads on complete
+                    uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+                        // 2. Simpan data ke Firestore setelah foto berhasil diupload
+                        db.collection("absensi").add({
+                            nama: nama,
+                            nim: nim,
+                            kampus: kampus,
+                            fotoUrl: downloadURL, // Gunakan URL dari Firebase Storage
+                            waktuKirim: firebase.firestore.FieldValue.serverTimestamp(),
+                            waktuMasuk: new Date().toTimeString().slice(0, 5),
+                            waktuPulang: '',
+                            status: 'Hadir',
+                            emailMahasiswa: currentUser.email
+                        })
+                        .then(() => {
+                            tampilkanModal('Absensi Terkirim', 'Data Anda telah berhasil disimpan.');
+                            formAbsen.reset();
+                        })
+                        .catch((error) => {
+                            tampilkanModal('Gagal Menyimpan', 'Gagal menyimpan data absensi: ' + error.message, true);
+                        })
+                        .finally(() => {
+                            btnKirim.disabled = false;
+                            btnKirim.textContent = 'Kirim Absensi';
+                        });
+                    });
+                }
+            );
+        });
+
+        // Tampilkan Laporan Admin (Real-time)
+        function tampilkanLaporanAbsensi() {
+            db.collection("absensi").orderBy("waktuKirim", "desc").onSnapshot((querySnapshot) => {
+                tabelLaporanBody.innerHTML = '';
+                if (querySnapshot.empty) {
+                    tabelLaporanBody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-gray-500">Belum ada data absensi.</td></tr>`;
+                    return;
+                }
+
+                let allDataForEmail = []; // Siapkan array untuk data email
+
+                querySnapshot.forEach((doc, index) => {
+                    const data = doc.data();
+                    const id = doc.id;
+                    allDataForEmail.push(data); // Tambahkan data ke array
+
+                    const waktuKirimObj = data.waktuKirim ? data.waktuKirim.toDate() : new Date();
+                    const waktuKirimFormatted = waktuKirimObj.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) + ' ' + waktuKirimObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-200 hover:bg-gray-50';
+                    row.innerHTML = `
+                        <td class="py-3 px-4">${index + 1}</td>
+                        <td class="py-3 px-4">${data.nama}</td>
+                        <td class="py-3 px-4">${data.nim}</td>
+                        <td class="py-3 px-4 text-center"><a href="${data.fotoUrl}" target="_blank"><img src="${data.fotoUrl}" class="h-12 w-12 object-cover rounded-md mx-auto cursor-pointer"></a></td>
+                        <td class="py-3 px-4">${waktuKirimFormatted}</td>
+                        <td class="py-3 px-4"><input type="time" class="border rounded px-2 py-1 w-full" value="${data.waktuMasuk || ''}" onchange="simpanPerubahan('${id}', 'waktuMasuk', this.value)"></td>
+                        <td class="py-3 px-4"><input type="time" class="border rounded px-2 py-1 w-full" value="${data.waktuPulang || ''}" onchange="simpanPerubahan('${id}', 'waktuPulang', this.value)"></td>
+                        <td class="py-3 px-4"><select class="border rounded px-2 py-1 w-full" onchange="simpanPerubahan('${id}', 'status', this.value)">${buatOpsiStatus(data.status)}</select></td>
+                        <td class="py-3 px-4 text-center"><button class="bg-red-500 hover:bg-red-700 text-white text-xs font-bold py-1 px-2 rounded" onclick="hapusAbsensi('${id}', '${data.fotoUrl}')">Hapus</button></td>
+                    `;
+                    tabelLaporanBody.appendChild(row);
+                });
+
+                // Simpan data terbaru ke variabel global untuk fungsi email
+                window.laporanAbsensiGlobal = allDataForEmail;
+
+            }, (error) => {
+                console.error("Error fetching data: ", error);
+                tampilkanModal('Error', 'Gagal memuat data dari database.', true);
             });
         }
         
+        // Fungsi baru untuk simpan perubahan ke Firestore
+        function simpanPerubahan(id, field, value) {
+            db.collection("absensi").doc(id).update({ [field]: value })
+                .catch(error => console.error("Error updating document: ", error));
+        }
+
+        // Fungsi hapus yang diperbarui untuk hapus data & foto
+        function hapusAbsensi(id, fotoUrl) {
+            if (confirm('Anda yakin ingin menghapus data absensi ini?')) {
+                // Hapus dokumen dari Firestore
+                db.collection("absensi").doc(id).delete()
+                    .then(() => {
+                        // Jika ada foto, hapus juga dari Storage
+                        if (fotoUrl) {
+                            const fotoRef = storage.refFromURL(fotoUrl);
+                            fotoRef.delete().catch(error => {
+                                if (error.code === 'storage/object-not-found') {
+                                    console.log("Foto sudah tidak ada, lanjut.");
+                                } else {
+                                    console.error("Gagal hapus foto: ", error);
+                                }
+                            });
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Error removing document: ", error);
+                        tampilkanModal('Gagal', 'Gagal menghapus data.', true);
+                    });
+            }
+        }
+
         function buatOpsiStatus(statusTersimpan) {
             const opsi = ['Hadir', 'Sakit', 'Izin', 'Alpa'];
             return opsi.map(opt => `<option value="${opt}" ${opt === statusTersimpan ? 'selected' : ''}>${opt}</option>`).join('');
         }
-        function simpanStatus(index, status) {
-            let absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
-            if (absensiData[index]) { absensiData[index].status = status; localStorage.setItem('absensi_data', JSON.stringify(absensiData)); }
-        }
-        function simpanWaktu(index, tipeWaktu, nilai) {
-            let absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
-            if (absensiData[index]) { absensiData[index][tipeWaktu] = nilai; localStorage.setItem('absensi_data', JSON.stringify(absensiData)); }
-        }
-        function hapusAbsensi(index) {
-            if (confirm('Anda yakin ingin menghapus data absensi ini?')) {
-                let absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-                absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
-                absensiData.splice(index, 1);
-                localStorage.setItem('absensi_data', JSON.stringify(absensiData));
-                tampilkanLaporanAbsensi();
-            }
-        }
-        function tampilkanDaftarMahasiswa() {
-            const userCredentials = JSON.parse(localStorage.getItem('user_credentials')) || {};
-            tabelMahasiswaBody.innerHTML = '';
-            const mahasiswaEmails = Object.keys(userCredentials).filter(email => email !== ADMIN_EMAIL);
-            if (mahasiswaEmails.length === 0) {
-                tabelMahasiswaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Belum ada mahasiswa terdaftar.</td></tr>';
-            } else {
-                mahasiswaEmails.forEach((email, index) => {
-                    const row = document.createElement('tr');
-                    row.className = 'border-b border-gray-200';
-                    row.innerHTML = `<td class="py-3 px-6">${index + 1}</td><td class="py-3 px-6">${email}</td><td class="py-3 px-6 text-center"><button class="bg-red-500 hover:bg-red-700 text-white text-xs font-bold py-1 px-2 rounded" onclick="hapusMahasiswa('${email}')">Hapus</button></td>`;
-                    tabelMahasiswaBody.appendChild(row);
-                });
-            }
-            modalMahasiswa.style.display = 'flex';
-        }
-        function hapusMahasiswa(email) {
-            if (confirm(`Anda yakin ingin menghapus akun ${email}?`)) {
-                let userCredentials = JSON.parse(localStorage.getItem('user_credentials')) || {};
-                delete userCredentials[email];
-                localStorage.setItem('user_credentials', JSON.stringify(userCredentials));
-                tampilkanDaftarMahasiswa();
-            }
-        }
         
+        // Fungsi Kirim Laporan via Email (menggunakan data dari Firebase)
         btnKirimLaporanEmail.addEventListener('click', () => {
-            const absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
+            const absensiData = window.laporanAbsensiGlobal || [];
 
             if (absensiData.length === 0) {
                 tampilkanModal('Gagal', `Tidak ada data untuk dikirim.`, true);
                 return;
             }
             
-            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
-            
             let tabelHtml = `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;"><thead><tr style="background-color: #f2f2f2;"><th>No.</th><th>Nama</th><th>NIM</th><th>Kampus</th><th>Tanggal</th><th>Waktu Masuk</th><th>Waktu Pulang</th><th>Status</th></tr></thead><tbody>`;
             absensiData.forEach((data, index) => {
-                const tanggalKirim = new Date(data.waktu).toLocaleDateString('id-ID');
+                const tanggalKirim = data.waktuKirim ? data.waktuKirim.toDate().toLocaleDateString('id-ID') : 'N/A';
                 tabelHtml += `<tr><td>${index + 1}</td><td>${data.nama}</td><td>${data.nim}</td><td>${data.kampus}</td><td>${tanggalKirim}</td><td>${data.waktuMasuk || '-'}</td><td>${data.waktuPulang || '-'}</td><td>${data.status || '-'}</td></tr>`;
             });
             tabelHtml += `</tbody></table>`;
 
             const dataForCsv = absensiData.map((data, index) => ({
-                'No.': index + 1, 'Nama Mahasiswa': data.nama, 'NIM': data.nim, 'Kampus': data.kampus,
-                'Tanggal': new Date(data.waktu).toLocaleDateString('id-ID'),
-                'Waktu Masuk': data.waktuMasuk || '', 'Waktu Pulang': data.waktuPulang || '', 'Status': data.status
+                'No.': index + 1, 
+                'Nama Mahasiswa': data.nama, 
+                'NIM': data.nim, 
+                'Kampus': data.kampus,
+                'Tanggal': data.waktuKirim ? data.waktuKirim.toDate().toLocaleDateString('id-ID') : 'N/A',
+                'Waktu Masuk': data.waktuMasuk || '', 
+                'Waktu Pulang': data.waktuPulang || '', 
+                'Status': data.status
             }));
             const csvString = Papa.unparse(dataForCsv);
             const encodedUri = encodeURI(`data:text/csv;charset=utf-8,${csvString}`);
-            const linkDownload = `<a href="${encodedUri}" download="laporan_absensi_keseluruhan.csv" style="background-color:#28a745;color:white;padding:10px 15px;text-decoration:none;border-radius:5px;">Download Laporan</a>`;
+            const linkDownload = `<a href="${encodedUri}" download="laporan_absensi.csv" style="background-color:#28a745;color:white;padding:10px 15px;text-decoration:none;border-radius:5px;">Download Laporan (CSV)</a>`;
 
             const templateParams = {
                 to_email: EMAIL_ADMIN_TUJUAN,
@@ -388,9 +460,10 @@
             
             tampilkanModal('Mengirim...', 'Sedang mempersiapkan laporan...');
             emailjs.send('service_crd8v2r', 'template_k3jmrfv', templateParams)
-                .then(() => { tampilkanModal('Sukses', `Laporan terkirim.`); }, 
-                      (error) => { tampilkanModal('Gagal', 'Terjadi kesalahan.', true); console.log('EMAIL FAILED...', error); });
+                .then(() => { tampilkanModal('Sukses', `Laporan telah dikirim ke ${EMAIL_ADMIN_TUJUAN}.`); }, 
+                      (error) => { tampilkanModal('Gagal', 'Terjadi kesalahan saat mengirim email.', true); console.log('EMAIL FAILED...', error); });
         });
+
     </script>
 </body>
 </html>
