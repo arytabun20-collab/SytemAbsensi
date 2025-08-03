@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -18,6 +17,10 @@
         emailjs.init({ publicKey: "ziS95MemIgRkjCG3l" }); 
     })();
     </script>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -140,6 +143,21 @@
     </div>
 
     <script>
+        // ✔️ STEP 3.2: TAMBAHKAN KONFIGURASI DAN INISIALISASI FIREBASE
+        // GANTI DENGAN KODE KONFIGURASI DARI PROYEK FIREBASE ANDA
+        const firebaseConfig = {
+          apiKey: "AIzaSy...GANTI-DENGAN-API-KEY-ANDA",
+          authDomain: "proyek-anda.firebaseapp.com",
+          projectId: "proyek-anda",
+          storageBucket: "proyek-anda.appspot.com",
+          messagingSenderId: "GANTI-DENGAN-SENDER-ID-ANDA",
+          appId: "GANTI-DENGAN-APP-ID-ANDA"
+        };
+        // Inisialisasi Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
         // --- Elemen DOM ---
         const halamanLogin = document.getElementById('halaman-login');
         const halamanDaftar = document.getElementById('halaman-daftar');
@@ -162,7 +180,6 @@
         const modalMahasiswa = document.getElementById('modal-mahasiswa');
         const tabelMahasiswaBody = document.getElementById('tabel-mahasiswa-body');
         const tombolTutupModalMahasiswa = document.getElementById('tombol-tutup-modal-mahasiswa');
-        // Variabel filterTanggal dan btnResetData dihapus
 
         // --- Konfigurasi ---
         const ADMIN_EMAIL = 'admin@pte.com';
@@ -188,13 +205,12 @@
             halamanAdmin.style.display = 'none';
             halamanAbsen.style.display = 'block';
         };
-        // Fungsi goToAdminPage diubah
         const goToAdminPage = () => {
             halamanLogin.style.display = 'none';
             halamanDaftar.style.display = 'none';
             halamanAbsen.style.display = 'none';
             halamanAdmin.style.display = 'block';
-            tampilkanLaporanAbsensi(); // Langsung tampilkan laporan tanpa set tanggal
+            tampilkanLaporanAbsensi(); 
         };
 
         // --- Event Listener ---
@@ -205,9 +221,10 @@
         tombolTutupModal.addEventListener('click', () => { modalKonfirmasi.style.display = 'none'; });
         btnLihatMahasiswa.addEventListener('click', tampilkanDaftarMahasiswa);
         tombolTutupModalMahasiswa.addEventListener('click', () => { modalMahasiswa.style.display = 'none'; });
-        // Event listener untuk filterTanggal dan btnResetData dihapus
 
-        // --- Logika Registrasi & Login ---
+        // --- SISA KODE JAVASCRIPT ANDA MASIH MENGGUNAKAN localStorage ---
+        // --- LANJUTKAN KE LANGKAH 4 UNTUK MENGGANTI LOGIKA DI BAWAH INI ---
+        
         formDaftar.addEventListener('submit', (event) => {
             event.preventDefault();
             const email = document.getElementById('daftar-email').value;
@@ -234,7 +251,6 @@
             else { tampilkanModal('Login Gagal', 'Email atau password salah.', true); }
         });
 
-        // --- Logika Absensi Mahasiswa ---
         formAbsen.addEventListener('submit', (event) => {
             event.preventDefault();
             if (!formAbsen.checkValidity()) { formAbsen.reportValidity(); return; }
@@ -261,28 +277,19 @@
             }
         });
 
-        // --- Logika Halaman Admin (DIUBAH) ---
         function tampilkanLaporanAbsensi() {
-            // Logika filter berdasarkan tanggal dihapus
             const absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-
             tabelLaporanBody.innerHTML = '';
             if (absensiData.length === 0) {
-                // Pesan diubah menjadi lebih umum
                 tabelLaporanBody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-gray-500">Tidak ada data absensi.</td></tr>`;
                 return;
             }
-            
-            // Mengurutkan data dari yang terbaru ke terlama
             absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
-
             absensiData.forEach((data, index) => {
                 const waktuKirimObj = new Date(data.waktu);
-                // Menampilkan tanggal dan waktu kirim
                 const waktuKirimFormatted = waktuKirimObj.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) + ' ' + waktuKirimObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
                 const row = document.createElement('tr');
                 row.className = 'border-b border-gray-200 hover:bg-gray-50';
-                // index yang digunakan untuk fungsi hapus, simpan, dll. tetap index asli dari array
                 row.innerHTML = `
                     <td class="py-3 px-4">${index + 1}</td>
                     <td class="py-3 px-4">${data.nama}</td>
@@ -304,18 +311,18 @@
         }
         function simpanStatus(index, status) {
             let absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu)); // Pastikan urutan sama
+            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
             if (absensiData[index]) { absensiData[index].status = status; localStorage.setItem('absensi_data', JSON.stringify(absensiData)); }
         }
         function simpanWaktu(index, tipeWaktu, nilai) {
             let absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu)); // Pastikan urutan sama
+            absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
             if (absensiData[index]) { absensiData[index][tipeWaktu] = nilai; localStorage.setItem('absensi_data', JSON.stringify(absensiData)); }
         }
         function hapusAbsensi(index) {
             if (confirm('Anda yakin ingin menghapus data absensi ini?')) {
                 let absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
-                absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu)); // Pastikan urutan sama
+                absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
                 absensiData.splice(index, 1);
                 localStorage.setItem('absensi_data', JSON.stringify(absensiData));
                 tampilkanLaporanAbsensi();
@@ -346,7 +353,6 @@
             }
         }
         
-        // Fungsi pengiriman email diubah
         btnKirimLaporanEmail.addEventListener('click', () => {
             const absensiData = JSON.parse(localStorage.getItem('absensi_data')) || [];
 
@@ -355,7 +361,6 @@
                 return;
             }
             
-            // Mengurutkan data sebelum mengirim email
             absensiData.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
             
             let tabelHtml = `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;"><thead><tr style="background-color: #f2f2f2;"><th>No.</th><th>Nama</th><th>NIM</th><th>Kampus</th><th>Tanggal</th><th>Waktu Masuk</th><th>Waktu Pulang</th><th>Status</th></tr></thead><tbody>`;
@@ -376,7 +381,7 @@
 
             const templateParams = {
                 to_email: EMAIL_ADMIN_TUJUAN,
-                tanggal_laporan: "Laporan Absensi Keseluruhan", // Judul diubah
+                tanggal_laporan: "Laporan Absensi Keseluruhan",
                 laporan_html: tabelHtml,
                 link_download_csv: linkDownload
             };
