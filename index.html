@@ -25,7 +25,7 @@
 
     <style>
         body { font-family: 'Inter', sans-serif; }
-        #halaman-daftar, #halaman-absen, #halaman-admin, #modal-konfirmasi, #modal-mahasiswa { display: none; }
+        #halaman-daftar, #halaman-absen, #halaman-admin, #modal-konfirmasi { display: none; }
         button:disabled { background-color: #9ca3af; cursor: not-allowed; }
     </style>
 </head>
@@ -88,7 +88,6 @@
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-2xl font-bold text-gray-800">Dashboard Laporan Absensi</h1>
                 <div class="flex items-center space-x-4">
-                    <button id="btn-lihat-mahasiswa" class="text-sm text-blue-600 hover:text-blue-800 underline">Daftar Mahasiswa (Soon)</button>
                     <button id="btn-admin-logout" class="text-sm text-gray-500 hover:text-blue-600 underline">Logout</button>
                 </div>
             </div>
@@ -126,32 +125,15 @@
         </div>
     </div>
 
-    <div id="modal-mahasiswa" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-        <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg w-full">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold text-gray-800">Mahasiswa Terdaftar</h2>
-                <button id="tombol-tutup-modal-mahasiswa" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-            </div>
-            <div class="overflow-y-auto max-h-96 rounded-lg border border-gray-200">
-                <table class="min-w-full bg-white">
-                    <thead class="bg-gray-100 text-gray-600 uppercase text-sm sticky top-0">
-                        <tr><th class="py-3 px-6 text-left">No.</th><th class="py-3 px-6 text-left">Alamat Email</th><th class="py-3 px-6 text-center">Aksi</th></tr>
-                    </thead>
-                    <tbody id="tabel-mahasiswa-body" class="text-gray-700 text-sm"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
     <script>
         // GANTI DENGAN KODE KONFIGURASI DARI PROYEK FIREBASE ANDA
         const firebaseConfig = {
-          apiKey: "AIzaSy...GANTI-DENGAN-API-KEY-ANDA",
-          authDomain: "proyek-anda.firebaseapp.com",
-          projectId: "proyek-anda",
-          storageBucket: "proyek-anda.appspot.com",
-          messagingSenderId: "GANTI-DENGAN-SENDER-ID-ANDA",
-          appId: "GANTI-DENGAN-APP-ID-ANDA"
+          apiKey: "AIzaSyB3nuvc9n1bfrMDyuZAMvsRK1kkh5I-DmQ",
+          authDomain: "sistemabsensipte.firebaseapp.com",
+          projectId: "sistemabsensipte",
+          storageBucket: "sistemabsensipte.appspot.com",
+          messagingSenderId: "344362657381",
+          appId: "1:344362657381:web:6315080952bd1a190e488c"
         };
         // Inisialisasi Firebase
         firebase.initializeApp(firebaseConfig);
@@ -177,14 +159,10 @@
         const modalJudul = document.getElementById('modal-judul');
         const pesanModal = document.getElementById('pesan-modal');
         const tombolTutupModal = document.getElementById('tombol-tutup-modal');
-        const btnLihatMahasiswa = document.getElementById('btn-lihat-mahasiswa');
-        const modalMahasiswa = document.getElementById('modal-mahasiswa');
-        const tabelMahasiswaBody = document.getElementById('tabel-mahasiswa-body');
-        const tombolTutupModalMahasiswa = document.getElementById('tombol-tutup-modal-mahasiswa');
+        // Variabel untuk Modal Mahasiswa Dihapus
 
         // --- Konfigurasi ---
         const ADMIN_EMAIL = 'admin@pte.com';
-        const ADMIN_PASSWORD = 'admin123';
         const EMAIL_ADMIN_TUJUAN = 'arytabun10@gmail.com';
 
         // --- Fungsi Helper & Navigasi ---
@@ -217,15 +195,12 @@
         // --- Cek Status Login Saat Halaman Dimuat ---
         auth.onAuthStateChanged(user => {
             if (user) {
-                // Jika user adalah admin, langsung ke halaman admin
                 if (user.email === ADMIN_EMAIL) {
                     goToAdminPage();
                 } else {
-                // Jika user adalah mahasiswa, ke halaman absen
                     goToAbsenPage();
                 }
             } else {
-                // Jika tidak ada user, tampilkan halaman login
                 goToHalamanLogin();
             }
         });
@@ -238,8 +213,7 @@
         btnAdminLogout.addEventListener('click', () => auth.signOut());
 
         tombolTutupModal.addEventListener('click', () => { modalKonfirmasi.style.display = 'none'; });
-        // btnLihatMahasiswa.addEventListener('click', tampilkanDaftarMahasiswa); // Sementara dinonaktifkan
-        tombolTutupModalMahasiswa.addEventListener('click', () => { modalMahasiswa.style.display = 'none'; });
+        // Event Listener untuk Modal Mahasiswa Dihapus
 
         // --- LOGIKA FIREBASE ---
         
@@ -298,27 +272,25 @@
             btnKirim.disabled = true;
             btnKirim.textContent = 'Mengunggah...';
 
-            // 1. Upload foto ke Firebase Storage
             const filePath = `bukti/${currentUser.uid}/${Date.now()}_${foto.name}`;
             const storageRef = storage.ref(filePath);
             const uploadTask = storageRef.put(foto);
 
             uploadTask.on('state_changed', 
                 (snapshot) => { /* bisa tambahkan progress bar di sini */ }, 
-                (error) => { // Handle unsuccessful uploads
+                (error) => {
                     console.error("Upload failed: ", error);
                     tampilkanModal('Upload Gagal', 'Gagal mengunggah foto.', true);
                     btnKirim.disabled = false;
                     btnKirim.textContent = 'Kirim Absensi';
                 }, 
-                () => { // Handle successful uploads on complete
+                () => {
                     uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
-                        // 2. Simpan data ke Firestore setelah foto berhasil diupload
                         db.collection("absensi").add({
                             nama: nama,
                             nim: nim,
                             kampus: kampus,
-                            fotoUrl: downloadURL, // Gunakan URL dari Firebase Storage
+                            fotoUrl: downloadURL,
                             waktuKirim: firebase.firestore.FieldValue.serverTimestamp(),
                             waktuMasuk: new Date().toTimeString().slice(0, 5),
                             waktuPulang: '',
@@ -350,12 +322,12 @@
                     return;
                 }
 
-                let allDataForEmail = []; // Siapkan array untuk data email
+                let allDataForEmail = [];
 
                 querySnapshot.forEach((doc, index) => {
                     const data = doc.data();
                     const id = doc.id;
-                    allDataForEmail.push(data); // Tambahkan data ke array
+                    allDataForEmail.push(data);
 
                     const waktuKirimObj = data.waktuKirim ? data.waktuKirim.toDate() : new Date();
                     const waktuKirimFormatted = waktuKirimObj.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) + ' ' + waktuKirimObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -376,7 +348,6 @@
                     tabelLaporanBody.appendChild(row);
                 });
 
-                // Simpan data terbaru ke variabel global untuk fungsi email
                 window.laporanAbsensiGlobal = allDataForEmail;
 
             }, (error) => {
@@ -385,19 +356,15 @@
             });
         }
         
-        // Fungsi baru untuk simpan perubahan ke Firestore
         function simpanPerubahan(id, field, value) {
             db.collection("absensi").doc(id).update({ [field]: value })
                 .catch(error => console.error("Error updating document: ", error));
         }
 
-        // Fungsi hapus yang diperbarui untuk hapus data & foto
         function hapusAbsensi(id, fotoUrl) {
             if (confirm('Anda yakin ingin menghapus data absensi ini?')) {
-                // Hapus dokumen dari Firestore
                 db.collection("absensi").doc(id).delete()
                     .then(() => {
-                        // Jika ada foto, hapus juga dari Storage
                         if (fotoUrl) {
                             const fotoRef = storage.refFromURL(fotoUrl);
                             fotoRef.delete().catch(error => {
@@ -421,7 +388,6 @@
             return opsi.map(opt => `<option value="${opt}" ${opt === statusTersimpan ? 'selected' : ''}>${opt}</option>`).join('');
         }
         
-        // Fungsi Kirim Laporan via Email (menggunakan data dari Firebase)
         btnKirimLaporanEmail.addEventListener('click', () => {
             const absensiData = window.laporanAbsensiGlobal || [];
 
